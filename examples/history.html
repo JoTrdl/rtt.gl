@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>RTT GL</title>
+
+   <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+  </style>
+  <script src="stats.min.js"></script>
+  <script src="../rtt.gl.min.js"></script>
+</head>
+
+<body>
+<canvas id="canvas" width="512" height="512"></canvas>
+
+</body>
+
+
+<script type="application/x-glsl" id="fragment-square">
+  precision highp float;
+  varying vec2 vUv;
+
+  uniform sampler2D tSampler;
+  uniform sampler2D tHistory[3];
+  uniform float ratio;
+  uniform int t;
+
+  void main( ) { 
+
+    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+
+    vec2 rPos = vUv * vec2(ratio, 1.0);
+    vec2 min = vec2(0.2) * vec2(ratio, 1.0);
+    vec2 max = vec2(0.8) * vec2(ratio, 1.0);
+
+    if (rPos.x > min.x && rPos.x < max.x && rPos.y > min.y && rPos.y < max.y) {
+      if (t == 0)
+        gl_FragColor.r = 1.0;
+      else if (t == 1)
+        gl_FragColor.g = 1.0;
+      else if (t == 2)
+        gl_FragColor.b = 1.0;
+      else 
+        gl_FragColor = texture2D(tHistory[2], vUv); 
+    }
+  }
+  
+</script>
+
+<script>
+  var stats = new Stats();
+  stats.domElement.style.position = 'absolute';
+  stats.domElement.style.top = '0px';
+  stats.domElement.style.zIndex = 100;
+  document.body.appendChild( stats.domElement );
+
+  var get3DContext = function(canvas, opt_attribs) {
+    var names = ["webgl", "experimental-webgl"];
+    var context = null;
+    for (var ii = 0; ii < names.length; ++ii) {
+      try {
+        context = canvas.getContext(names[ii], opt_attribs);
+      } catch(e) {}
+      if (context) {
+        break;
+      }
+    }
+    return context;
+  }
+
+  var WIDTH = window.innerWidth;
+  var HEIGHT = window.innerHeight;
+  var RATIO = WIDTH / HEIGHT;
+
+  var canvas = document.getElementById('canvas');
+  canvas.width = WIDTH;
+  canvas.height = HEIGHT;
+
+  var gl = get3DContext(canvas, { 
+    premultipliedAlpha: false,
+    alpha: false,
+    depth: false,
+    stencil: false
+  });
+  gl.disable(gl.DEPTH_TEST);
+  gl.disable(gl.CULL_FACE);
+  gl.disable(gl.DITHER);
+
+  var uniform = {
+    't': {type: '1i', value: 0},
+    'ratio': {type: '1f', value: RATIO}
+  };
+
+  var rtt = new RTT(gl, {
+    history: 3,
+    width: WIDTH,
+    height: HEIGHT,
+    texture: { minFilter: gl.LINEAR, magFilter: gl.LINEAR }
+  }).fragment(document.getElementById('fragment-square').textContent, uniform)
+    .render();
+
+  window.addEventListener('resize', function() {
+    WIDTH = window.innerWidth;
+    HEIGHT = window.innerHeight;
+    RATIO = WIDTH / HEIGHT;
+
+    canvas.width = WIDTH;
+    canvas.height = HEIGHT;
+
+    rtt.resize({width: WIDTH, height: HEIGHT});
+
+    uniform.ratio.value = RATIO;
+  });
+
+
+  var render = function() {    
+    stats.update();
+    rtt.render().paint();
+
+    uniform.t.value += 1.0;
+  }
+  setInterval(render, 1000);
+
+</script>
+
+</html>

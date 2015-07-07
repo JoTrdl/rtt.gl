@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>RTT GL</title>
+
+   <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+  </style>
+  <script src="stats.min.js"></script>
+  <script src="../rtt.gl.min.js"></script>
+</head>
+
+<body>
+<canvas id="canvas" width="512" height="512"></canvas>
+
+</body>
+
+<script type="application/x-glsl" id="fragment-ether">
+  /*
+   * Original shader from https://www.shadertoy.com/view/MsjSW3
+   */
+  precision highp float;
+  varying vec2 vUv;
+
+  uniform sampler2D tSampler;
+
+  uniform float t;
+  uniform float ratio;
+
+  mat2 m(float a){float c=cos(a), s=sin(a);return mat2(c,-s,s,c);}
+  float map(vec3 p){
+      p.xz*= m(t * 0.2);
+      p.xy*= m(t * 0.1);
+      vec3 q = p*2.+t*1.;
+      return length(p+vec3(sin(t*0.7)))*log(length(p)+1.) + sin(q.x+sin(q.z+sin(q.y)))*0.25 - 1.;
+  }
+  
+  void main( ) { 
+
+    gl_FragColor = texture2D(tSampler, vUv) * 0.25;
+    vec2 p = (vUv - vec2(.5,.5) )* vec2(ratio, 1.0);
+    vec3 cl = vec3(0.);
+    float d = 2.5;
+
+    for(int i=0; i<=5; i++) {
+      vec3 p = vec3(0,0,5.) + normalize(vec3(p, -1.))*d;
+      float rz = map(p);
+      float f =  clamp((rz - map(p+.1))*0.5, -.1, 1. );
+      vec3 l = vec3(0.1,0.3,.45) + vec3(5., 2.5, 3.)*f;
+      cl = cl*l + (1.-smoothstep(0., 2.5, rz))*.7*l;
+      d += min(rz, 1.);
+    }
+
+    gl_FragColor += vec4(cl, 1.);
+  }
+
+  
+</script>
+
+<script type="application/x-glsl" id="fragment-bloom">
+  precision highp float;
+  varying vec2 vUv;
+
+  uniform sampler2D tSampler;
+
+  float kernel = .005;
+  float scale = 1.0;
+  float thresh = 1.9;
+
+  void main() {
+    vec4 sum = vec4(0);
+
+    // mess of for loops due to gpu compiler/hardware limitations
+    int j=-2;
+    for( int i=-2; i<=2; i++) sum+=texture2D(tSampler,vUv+vec2(i,j)*kernel);
+    j=-1;
+    for( int i=-2; i<=2; i++) sum+=texture2D(tSampler,vUv+vec2(i,j)*kernel);
+    j=0;
+    for( int i=-2; i<=2; i++) sum+=texture2D(tSampler,vUv+vec2(i,j)*kernel);
+    j=1;
+    for( int i=-2; i<=2; i++) sum+=texture2D(tSampler,vUv+vec2(i,j)*kernel);
+    j=2;
+    for( int i=-2; i<=2; i++) sum+=texture2D(tSampler,vUv+vec2(i,j)*kernel);
+    sum/=25.0;
+
+    vec4 s=texture2D(tSampler, vUv);
+    gl_FragColor=s;
+
+    // use the blurred colour if it's bright enough
+    if (length(sum)>thresh)
+    {
+        gl_FragColor += sum*scale;
+    }
+  }
+</script>
+
+<script>
+  var stats = new Stats();
+  stats.domElement.style.position = 'absolute';
+  stats.domElement.style.top = '0px';
+  stats.domElement.style.zIndex = 100;
+  document.body.appendChild( stats.domElement );
+
+  var get3DContext = function(canvas, opt_attribs) {
+    var names = ["webgl", "experimental-webgl"];
+    var context = null;
+    for (var ii = 0; ii < names.length; ++ii) {
+      try {
+        context = canvas.getContext(names[ii], opt_attribs);
+      } catch(e) {}
+      if (context) {
+        break;
+      }
+    }
+    return context;
+  }
+
+  var OPTIMIZE_FACTOR = 0.5;
+  var WIDTH = window.innerWidth;
+  var HEIGHT = window.innerHeight;
+  var RATIO = WIDTH / HEIGHT;
+
+  var canvas = document.getElementById('canvas');
+  canvas.width = WIDTH;
+  canvas.height = HEIGHT;
+
+  var gl = get3DContext(canvas, { 
+    premultipliedAlpha: false,
+    alpha: false,
+    depth: false,
+    stencil: false
+  });
+  gl.disable(gl.DEPTH_TEST);
+  gl.disable(gl.CULL_FACE);
+  gl.disable(gl.DITHER);
+
+  var uniform = {
+    't': {type: '1f', value: 0},
+    'ratio': {type: '1f', value: RATIO}
+  };
+
+  var rtt = new RTT(gl, {
+    width: WIDTH * OPTIMIZE_FACTOR,
+    height: HEIGHT * OPTIMIZE_FACTOR
+  })
+    .fragment(document.getElementById('fragment-ether').textContent, uniform)
+    .fragment(document.getElementById('fragment-bloom').textContent)
+
+  window.addEventListener('resize', function() {
+    WIDTH = window.innerWidth;
+    HEIGHT = window.innerHeight;
+    RATIO = WIDTH / HEIGHT;
+
+    canvas.width = WIDTH;
+    canvas.height = HEIGHT;
+
+    rtt.resize({width: WIDTH * OPTIMIZE_FACTOR, height: HEIGHT * OPTIMIZE_FACTOR});
+
+    uniform.ratio.value = RATIO;
+  });
+
+  var t = 0;
+
+  var render = function() {
+    requestAnimationFrame(render);
+    stats.update();
+
+    uniform.t.value += 0.05;
+    rtt.render().paint();
+  }
+  render();
+
+</script>
+
+</html>
