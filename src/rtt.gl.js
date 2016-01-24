@@ -1,4 +1,4 @@
-/*! RTT.gl v1.0.0 | (c) 2015 Johann Troendle | https://github.com/JoTrdl/rtt.gl */
+/*! RTT.gl v1.0.2 | (c) 2016 Johann Troendle | https://github.com/JoTrdl/rtt.gl */
 ;(function(root) {
 
   'use strict';
@@ -381,7 +381,7 @@
    */
   RTT.prototype.image = function(image) {
 
-    var texture = utils.createTexture(gl, this.width, this.height, {input: image});
+    var texture = utils.createTexture(this.gl, this.width, this.height, {input: image});
     var uniforms = {
       'tSampler': {type: 't', value: texture}
     };
