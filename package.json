@@ -1,6 +1,7 @@
 {
   "name": "rtt.gl",
   "description": "WebGL Render To Texture utils",
-  "version": "1.0.0",
-  "author": "JoTrdl"
+  "version": "1.0.1",
+  "author": "JoTrdl",
+  "main": "src/rtt.gl.js"
 }
