@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>RTT GL</title>
+
+   <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+  </style>
+  <script src="stats.min.js"></script>
+  <script src="../src/rtt.gl.min.js"></script>
+</head>
+
+<body>
+<canvas id="canvas" width="512" height="512"></canvas>
+
+</body>
+
+<script type="application/x-glsl" id="fragment-bloom">
+  precision highp float;
+  varying vec2 vUv;
+
+  uniform sampler2D tSampler;
+
+  float kernel = .005;
+  float scale = 1.0;
+  float thresh = 2.0;
+
+  void main() {
+    vec4 sum = vec4(0);
+
+    // mess of for loops due to gpu compiler/hardware limitations
+    int j=-2;
+    for( int i=-2; i<=2; i++) sum+=texture2D(tSampler,vUv+vec2(i,j)*kernel);
+    j=-1;
+    for( int i=-2; i<=2; i++) sum+=texture2D(tSampler,vUv+vec2(i,j)*kernel);
+    j=0;
+    for( int i=-2; i<=2; i++) sum+=texture2D(tSampler,vUv+vec2(i,j)*kernel);
+    j=1;
+    for( int i=-2; i<=2; i++) sum+=texture2D(tSampler,vUv+vec2(i,j)*kernel);
+    j=2;
+    for( int i=-2; i<=2; i++) sum+=texture2D(tSampler,vUv+vec2(i,j)*kernel);
+    sum/=25.0;
+
+    vec4 s = texture2D(tSampler, vUv);
+    gl_FragColor = s;
+
+    // use the blurred colour if it's bright enough
+    if (length(sum) > thresh)
+    {
+      gl_FragColor += sum * scale;
+    }
+  }
+</script>
+
+<!-- 7-tap gaussian blur X-->
+<script type="application/x-glsl" id="rtt-fragment-blurX">
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D tSampler;
+uniform vec2 d;
+
+const float gain = 64.0;
+void main() {
+  vec3 accum = vec3(0, 0, 0);
+  accum += texture2D(tSampler, vUv + vec2(d.x * -3.0, 0.0)).xyz * 1.0;
+  accum += texture2D(tSampler, vUv + vec2(d.x * -2.0, 0.0)).xyz * 6.0;
+  accum += texture2D(tSampler, vUv + vec2(d.x * -1.0, 0.0)).xyz * 15.0;
+  accum += texture2D(tSampler, vUv + vec2(d.x * 0.0, 0.0)).xyz * 20.0;
+  accum += texture2D(tSampler, vUv + vec2(d.x * 1.0, 0.0)).xyz * 15.0;
+  accum += texture2D(tSampler, vUv + vec2(d.x * 2.0, 0.0)).xyz * 6.0;
+  accum += texture2D(tSampler, vUv + vec2(d.x * -3.0, 0.0)).xyz * 1.0;
+  gl_FragColor = vec4(accum / gain, 1.0);
+}
+</script>
+
+<!-- 7-tap gaussian blur Y-->
+<script type="application/x-glsl" id="rtt-fragment-blurY">
+precision highp float;
+uniform sampler2D tSampler;
+varying vec2 vUv;
+uniform vec2 d;
+
+const float gain = 64.0;
+
+void main() {
+  vec3 accum = vec3(0, 0, 0);
+  accum += texture2D(tSampler, vUv + vec2(0.0, d.y * -3.0)).xyz * 1.0;
+  accum += texture2D(tSampler, vUv + vec2(0.0, d.y * -2.0)).xyz * 6.0;
+  accum += texture2D(tSampler, vUv + vec2(0.0, d.y * -1.0)).xyz * 15.0;
+  accum += texture2D(tSampler, vUv + vec2(0.0, d.y * 0.0)).xyz * 20.0;
+  accum += texture2D(tSampler, vUv + vec2(0.0, d.y * 1.0)).xyz * 15.0;
+  accum += texture2D(tSampler, vUv + vec2(0.0, d.y * 2.0)).xyz * 6.0;
+  accum += texture2D(tSampler, vUv + vec2(0.0, d.y * 3.0)).xyz * 1.0;
+  gl_FragColor = vec4(accum / gain, 1.0);
+}
+</script>
+
+<script>
+  var stats = new Stats();
+  stats.domElement.style.position = 'absolute';
+  stats.domElement.style.top = '0px';
+  stats.domElement.style.zIndex = 100;
+  document.body.appendChild( stats.domElement );
+
+  var get3DContext = function(canvas, opt_attribs) {
+    var names = ["webgl", "experimental-webgl"];
+    var context = null;
+    for (var ii = 0; ii < names.length; ++ii) {
+      try {
+        context = canvas.getContext(names[ii], opt_attribs);
+      } catch(e) {}
+      if (context) {
+        break;
+      }
+    }
+    return context;
+  }
+
+  var WIDTH = window.innerWidth;
+  var HEIGHT = window.innerHeight;
+
+  var canvas = document.getElementById('canvas');
+  canvas.width = WIDTH;
+  canvas.height = HEIGHT;
+
+  var gl = get3DContext(canvas, {
+    premultipliedAlpha: false,
+    alpha: false,
+    depth: false,
+    stencil: false
+  });
+  gl.disable(gl.DEPTH_TEST);
+  gl.disable(gl.CULL_FACE);
+  gl.disable(gl.DITHER);
+
+
+  var rtt = new RTT(gl, {
+    width: WIDTH,
+    height: HEIGHT
+  });
+
+  var uniform = {
+    'd': { type: '2f', value: [1/WIDTH, 1/HEIGHT]}
+  };
+
+  window.addEventListener('resize', function() {
+    WIDTH = window.innerWidth;
+    HEIGHT = window.innerHeight;
+
+    canvas.width = WIDTH;
+    canvas.height = HEIGHT;
+
+    rtt.resize({width: WIDTH, height: HEIGHT});
+  });
+
+  var render = function() {
+    requestAnimationFrame(render);
+    stats.update();
+
+    rtt.render().paint();
+  }
+
+  var image = new Image();
+  image.src = './space.jpeg';
+  image.onload = function() {
+    rtt.image(this)
+       .fragment(document.getElementById('rtt-fragment-blurX').textContent, uniform)
+       .fragment(document.getElementById('rtt-fragment-blurY').textContent, uniform)
+       //.fragment(document.getElementById('fragment-bloom').textContent);
+
+    // Start rendering
+    render();
+  };
+
+
+</script>
+
+</html>

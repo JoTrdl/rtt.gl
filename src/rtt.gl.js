@@ -7,7 +7,7 @@
 
   /**
    * Create a GL program.
-   * 
+   *
    * @param  {WebGLRenderingContext} gl      WebGL context
    * @param  {String}                vsCode  Vertex code
    * @param  {String}                fsCode  Fragment code
@@ -35,7 +35,7 @@
 
   /**
    * Compile the shader.
-   * 
+   *
    * @param  {WebGLRenderingContext} gl   WebGL context
    * @param  {String}                code Shader code
    * @param  {Int}                   type Shader type (gl.VERTEX_SHADER | gl.FRAGMENT_SHADER)
@@ -43,7 +43,7 @@
    */
   utils.compileShader = function(gl, code, type) {
     var shader = gl.createShader(type);
-    
+
     gl.shaderSource(shader, code);
     gl.compileShader(shader);
 
@@ -61,24 +61,31 @@
 
   /**
    * Create an empty texture.
-   * 
+   *
    * @param  {WebGLRenderingContext} gl     WebGL context
    * @param  {Number}                width  Width
    * @param  {Number}                height Height
    * @return {Texture}                      The texture
    */
   utils.createTexture = function(gl, width, height, options) {
-    
+
     var type = options && options.type || gl.UNSIGNED_BYTE;
     var min = options && options.minFilter || gl.NEAREST;
     var mag = options && options.magFilter || gl.NEAREST;
     var wrapS = options && options.wrapS || gl.CLAMP_TO_EDGE;
     var wrapT = options && options.wrapT || gl.CLAMP_TO_EDGE;
+    var input = options && options.input || null;
 
     var texture = gl.createTexture();
 
     gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, type, null);
+
+    if (input) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    }
+    else {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, type, null);
+    }
 
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, mag);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, min);
@@ -137,7 +144,7 @@
 
   /**
    * Apply uniform.
-   * 
+   *
    * @param  {Object} gl       GL context
    * @param  {Object} shader   Shader program
    * @param  {Object} type     GL uniform type or 't' for texture
@@ -151,7 +158,7 @@
     if (value === null || !uLocation) {
       return;
     }
-    
+
     var args = [uLocation];
     if (value.length) // value is an array
       args = args.concat(value);
@@ -164,7 +171,7 @@
     else { // texture
       type.call(gl, uLocation, value);
 
-      if (texture.length) { 
+      if (texture.length) {
         // textures array
         for (var i = 0; i < texture.length; i++) {
           gl.activeTexture(gl.TEXTURE0 + value[i]);
@@ -174,13 +181,13 @@
       else { // single texture
         gl.activeTexture(gl.TEXTURE0 + value);
         gl.bindTexture(gl.TEXTURE_2D, texture);
-      } 
+      }
     }
   };
 
   /**
    * Apply attribute.
-   * 
+   *
    * @param  {Object} gl       GL context
    * @param  {Object} shader   Shader program
    * @param  {String} location Location name
@@ -207,7 +214,7 @@
   var RTT = function(gl, options) {
     this.options = options || {};
     this.gl = gl;
-   
+
     if (!(this.gl && this.gl instanceof WebGLRenderingContext)) {
       console.log('Error, paramater [gl] must be a WebGL context');
       return;
@@ -224,10 +231,10 @@
     // Initialize stuffs
     this.reset(true);
   };
-  
+
   /**
    * Resize the RTT.
-   *  
+   *
    * @param  {Object} options Object containing the new width/height.
    * @return {Object}         'this'
    */
@@ -334,7 +341,7 @@
 
   /**
    * Add a new fragment in the RTT chain with DEFAULT_VERTEX_SHADER vertex.
-   * 
+   *
    * @param  {String} fragmentShader The fragment shader
    * @return {Object}                'this' RTT for chaining
    */
@@ -344,7 +351,7 @@
 
   /**
    * Add a new vertex/fragment in the RTT chain.
-   * 
+   *
    * @param  {String} vertexShader   The vertext shader
    * @param  {String} fragmentShader The fragment shader
    * @return {Object}                'this' RTT for chaining
@@ -355,7 +362,7 @@
 
     this.shaders.push(shader);
     this.uniforms.push(uniforms);
-    
+
     // Init buffers before pushing on stack
     for (var a in attributes) {
       attributes[a].buffer = gl.createBuffer();
@@ -364,6 +371,21 @@
     this.attributes.push(attributes);
 
     return this;
+  };
+
+  /**
+   * Render an image on the chain.
+   *
+   * @return {Object}  'this' RTT for chaining
+   */
+  RTT.prototype.image = function(image) {
+
+    var texture = utils.createTexture(gl, this.width, this.height, {input: image});
+    var uniforms = {
+      'tSampler': {type: 't', value: texture}
+    };
+
+    return this.vertexFragment(DEFAULT_VERTEX_SHADER, DEFAULT_FRAGMENT_SHADER, uniforms);
   };
 
   /**
@@ -407,7 +429,7 @@
       // Apply n-1 sampler result
       applyUniform(gl, this.shaders[i], gl.uniform1i, 'tSampler', textureUnit, input);
       textureUnit ++;
-      
+
       // Apply uniforms
       var uniforms = this.uniforms[i] || {};
       for (var u in uniforms) {
@@ -432,13 +454,13 @@
       gl.viewport(0, 0, this.width, this.height);
       gl.drawArrays.apply(gl, this.geometry);
     }
-   
+
     return this;
   };
 
   /**
    * Iterate the last program on the stack.
-   * 
+   *
    * @param  {Number} count Iterate count
    * @return {Object} 'this' RTT for chaining
    */
@@ -446,7 +468,7 @@
 
     var shader = this.shaders[this.shaders.length - 1];
     var uniform = this.uniforms[this.uniforms.length - 1];
-    
+
     for (var i = 0; i < count; i++) {
       this.shaders.push(shader);
       this.uniforms.push(uniform);
@@ -457,7 +479,7 @@
 
   /**
    * Swap the 2 internal textures.
-   * 
+   *
    * @return {Object} 'this' RTT for chaining
    */
   RTT.prototype.swap = function() {
@@ -470,11 +492,11 @@
 
   /**
    * Clear the framebuffer.
-   * 
+   *
    * @return {Object} 'this' RTT for chaining
    */
   RTT.prototype.clear = function() {
-    
+
     if (!this.output) { // Nothing to clear
       return this;
     }
@@ -492,7 +514,7 @@
    * @return {Object} 'this' RTT for chaining
    */
   RTT.prototype.paint = function() {
-    
+
     if (!this.output) {
       console.log('Error: no output to paint. Call render() at least once.');
       return this;
@@ -503,7 +525,7 @@
     gl.useProgram(this.paintShader);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    
+
     applyAttribute(gl, this.paintShader, 'position', 2, this.quadBuffer, this.quadVertices);
     applyUniform(gl, this.paintShader, gl.uniform1i, 'tSampler', 0, this.output);
 
