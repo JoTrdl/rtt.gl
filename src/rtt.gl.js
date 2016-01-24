@@ -1,5 +1,5 @@
 /*! RTT.gl v1.0.0 | (c) 2015 Johann Troendle | https://github.com/JoTrdl/rtt.gl */
-;(function(exports) {
+;(function(root) {
 
   'use strict';
 
@@ -537,6 +537,16 @@
   };
 
   // Export
-  exports.RTT = RTT;
+  (function (root, factory) {
+    if (typeof define === 'function' && define.amd) {
+      define([], factory);
+    } else if (typeof exports === 'object') {
+      module.exports = factory();
+    } else {
+      root.RTT = factory();
+    }
+  }(root, function () {
+    return RTT;
+  }));
 
-})(window);
+})(this);
